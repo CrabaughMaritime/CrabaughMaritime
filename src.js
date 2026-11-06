@@ -18,7 +18,162 @@ const recur=['None','Weekly','Monthly','Quarterly','Yearly'];
 const shell=(content)=>`<div class="shell"><aside><div class="brand"><img src="${LOGO}" alt="Crabaugh Maritime logo"><div><strong>CRABAUGH</strong><small>MARITIME</small></div></div><nav>${['Dashboard','Transactions','Receipts','Payroll','Reminders','Tax Center','Team'].map(x=>`<button data-tab="${x}" class="${tab===x?'active':''}">${x}</button>`).join('')}</nav><div class="asidebottom"><span>${esc(session?.user?.email||'')}</span><button id="logout-sidebar">Sign out</button></div></aside><main><header><div><span class="eyebrow">BUSINESS WORKSPACE</span><h1>${esc(tab)}</h1></div><div class="topright"><span>${esc(org?.name||'Crabaugh Maritime')}</span><img src="${LOGO}" alt="logo"><button id="logout" type="button" style="background:#b91c1c;color:white;border:0;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;white-space:nowrap;">Sign Out</button></div></header><div class="content">${content}</div></main></div>`;
 function notice(message,kind='error'){const el=document.getElementById('notice');if(el){el.textContent=message;el.className='notice '+kind;el.hidden=false;}}
 function showSetup(){app.innerHTML=`<section class="auth"><img src="${LOGO}"><h1>Crabaugh Maritime</h1><p>Deployment configuration is required. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in Vercel, then redeploy.</p><p>Follow the included README.md to create the Supabase database and security policies.</p></section>`;}
-function showAuth(){app.innerHTML=`<section class="auth"><img src="${LOGO}"><h1>Crabaugh Maritime</h1><p>Secure business accounting workspace</p><div class="panel"><h2>Sign in or create an account</h2><div id="notice" hidden></div><form id="authform"><label>Email<input name="email" type="email" required autocomplete="email" placeholder="you@example.com"></label><label>Password<input name="password" type="password" minlength="8" required autocomplete="current-password" placeholder="At least 8 characters"></label><div class="actions"><button type="submit" name="mode" value="signin">Sign in</button><button type="submit" name="mode" value="signup" class="secondary">Create account</button></div></form><p class="muted">If email confirmation is enabled, check your inbox after signing up.</p></div></section>`;
+
+function showAuth() {
+  app.innerHTML = `
+    <section class="auth">
+      <img src="${LOGO}" alt="Crabaugh Maritime">
+      <h1>Crabaugh Maritime</h1>
+      <p>Secure business accounting workspace</p>
+
+      <div class="panel">
+        <h2>Sign in or create an account</h2>
+        <div id="notice" hidden></div>
+
+        <form id="authform">
+          <label>Email
+            <input name="email" type="email" required
+              autocomplete="email" placeholder="you@example.com">
+          </label>
+          <label>Password
+            <input name="password" type="password" minlength="8"
+              required autocomplete="current-password">
+          </label>
+
+          <div class="actions">
+            <button type="submit" name="mode" value="signin">
+              Sign in
+            </button>
+            <button type="submit" name="mode" value="signup"
+              class="secondary">
+              Create account
+            </button>
+          </div>
+        </form>
+
+        <p>
+          <button id="forgot-password" type="button"
+            class="linkbtn">Forgot Password?</button>
+        </p>
+
+        <p class="muted">
+          If email confirmation is enabled, check your inbox.
+        </p>
+      </div>
+    </section>
+  `;
+
+  const form = document.getElementById('authform');
+  let mode = 'signin';
+
+  form.querySelectorAll('button[type=submit]').forEach(b => {
+    b.onclick = () => mode = b.value;
+  });
+
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const email = f.get('email');
+    const password = f.get('password');
+
+    const { error, data } = mode === 'signup'
+      ? await sb.auth.signUp({ email, password })
+      : await sb.auth.signInWithPassword({ email, password });
+
+    if (error) return notice(error.message);
+
+    if (mode === 'signup' && !data.session) {
+      return notice('Check your email to confirm your account.', 'ok');
+    }
+
+    session = data.session;
+    await initialize();
+  };
+
+  document.getElementById('forgot-password').onclick = async () => {
+    const email = form.elements.email.value.trim();
+
+    if (!email) {
+      return notice('Enter your email address first.');
+    }
+
+    const button = document.getElementById('forgot-password');
+    button.disabled = true;
+
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+      });
+
+      if (error) throw error;
+
+      notice(
+        'If an account exists for this email, a password reset link will be sent. Check your inbox.',
+        'ok'
+      );
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  };
+}
+
+function showPasswordReset() {
+  app.innerHTML = `
+    <section class="auth">
+      <img src="${LOGO}" alt="Crabaugh Maritime">
+      <h1>Reset Password</h1>
+
+      <div class="panel">
+        <h2>Create a new password</h2>
+        <div id="notice" hidden></div>
+
+        <form id="resetform">
+          <label>New password
+            <input name="password" type="password"
+              minlength="8" autocomplete="new-password"
+              required>
+          </label>
+
+          <label>Confirm password
+            <input name="confirm" type="password"
+              minlength="8" autocomplete="new-password"
+              required>
+          </label>
+
+          <button type="submit">Update Password</button>
+        </form>
+      </div>
+    </section>
+  `;
+
+  document.getElementById('resetform').onsubmit = async e => {
+    e.preventDefault();
+
+    const f = new FormData(e.target);
+    const password = f.get('password');
+    const confirm = f.get('confirm');
+
+    if (password !== confirm) {
+      return notice('Passwords do not match.');
+    }
+
+    const { error } = await sb.auth.updateUser({ password });
+
+    if (error) return notice(error.message);
+
+    notice('Password updated successfully!', 'ok');
+
+    setTimeout(async () => {
+      await sb.auth.signOut();
+      session = null;
+      org = null;
+      window.history.replaceState({}, '', window.location.pathname);
+      showAuth();
+    }, 1500);
+  };
+}
 const form=document.getElementById('authform');let mode='signin';form.querySelectorAll('button[type=submit]').forEach(b=>b.onclick=()=>mode=b.value);
 form.onsubmit=async e=>{e.preventDefault();const f=new FormData(form),email=f.get('email'),password=f.get('password');const {error,data}=mode==='signup'?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});if(error)return notice(error.message);if(mode==='signup'&&!data.session)return notice('Account created. Confirm your email, then sign in.','ok');session=data.session;await initialize();};}
 async function initialize(){if(!session){showAuth();return;}try{await sb.rpc('claim_my_invites');const {data,error}=await sb.from('memberships').select('org_id,role,organizations(id,name)').limit(1);if(error)throw error;if(!data?.length){showOrgCreate();return;}org=data[0].organizations;await load();}catch(e){app.innerHTML=`<section class="auth"><h2>Unable to load workspace</h2><p>${esc(e.message)}</p><button id="retry">Retry</button></section>`;document.getElementById('retry').onclick=initialize;}}
@@ -55,5 +210,48 @@ document.querySelectorAll('[data-donerem]').forEach(b=>b.onclick=async()=>{const
 const exportButton=document.getElementById('exportcsv');if(exportButton)exportButton.onclick=()=>{const fields=['date','description','amount','type','category','account','person','notes'];const csv=[fields.join(','),...transactions.map(t=>fields.map(k=>'"'+String(t[k]??'').replaceAll('"','""')+'"').join(','))].join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='crabaugh-maritime-transactions.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
 const invite=document.getElementById('inviteform');if(invite)invite.onsubmit=async e=>{e.preventDefault();const email=String(new FormData(invite).get('email')).trim().toLowerCase();const {error}=await sb.from('invitations').insert({org_id:org.id,email});if(error)return notice(error.message);notice('Invitation saved. Ask them to register with this email.','ok');loadTeam();};}
 async function loadTeam(){const [m,i]=await Promise.all([sb.from('memberships').select('user_id,role').eq('org_id',org.id),sb.from('invitations').select('email').eq('org_id',org.id)]);const team=document.getElementById('teamlist'),inv=document.getElementById('invitelist');if(team)team.innerHTML=m.error?esc(m.error.message):m.data.map(x=>`<div class="listrow">${esc(x.user_id===session.user.id?'You ('+session.user.email+')':x.user_id)} <strong>${esc(x.role)}</strong></div>`).join('');if(inv)inv.innerHTML=i.error?esc(i.error.message):i.data.map(x=>`<div class="listrow">${esc(x.email)}</div>`).join('')||'None';}
-async function start(){if(!configured){showSetup();return;}const {data,error}=await sb.auth.getSession();if(error){showAuth();return;}session=data.session;await initialize();sb.auth.onAuthStateChange((event,newSession)=>{if(event==='SIGNED_OUT'){session=null;org=null;showAuth();}});}
+
+async function start() {
+  if (!configured) {
+    showSetup();
+    return;
+  }
+
+  const { data, error } = await sb.auth.getSession();
+
+  if (error) {
+    showAuth();
+    return;
+  }
+
+  session = data.session;
+
+  const hash = new URLSearchParams(
+    window.location.hash.substring(1)
+  );
+
+  const isRecovery =
+    hash.get('type') === 'recovery';
+
+  sb.auth.onAuthStateChange((event, newSession) => {
+    session = newSession;
+
+    if (event === 'PASSWORD_RECOVERY') {
+      showPasswordReset();
+    }
+
+    if (event === 'SIGNED_OUT') {
+      session = null;
+      org = null;
+      showAuth();
+    }
+  });
+
+  if (isRecovery) {
+    showPasswordReset();
+    return;
+  }
+
+  await initialize();
+}
 start();
