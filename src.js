@@ -15,7 +15,11 @@ const accounts=[
   'Business Checking',
   'Joint Account',
   'Chris Personal Checking',
-  'Kayleen Personal Checking'
+  'Kayleen Personal Checking',
+  'Chris Chase Credit Card',
+  'Chris BofA Credit Card',
+  'Kayleen Chase Credit Card',
+  'Kayleen Amex'
 ];
 const kinds=['Payroll','Expense','Meeting','Tax','Accounting','Other'];
 const recur=['None','Weekly','Monthly','Quarterly','Yearly'];
