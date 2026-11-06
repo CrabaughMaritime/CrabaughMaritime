@@ -208,50 +208,6 @@ document.querySelectorAll('[data-donerem]').forEach(b=>b.onclick=async()=>{const
 const exportButton=document.getElementById('exportcsv');if(exportButton)exportButton.onclick=()=>{const fields=['date','description','amount','type','category','account','person','notes'];const csv=[fields.join(','),...transactions.map(t=>fields.map(k=>'"'+String(t[k]??'').replaceAll('"','""')+'"').join(','))].join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='crabaugh-maritime-transactions.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
 const invite=document.getElementById('inviteform');if(invite)invite.onsubmit=async e=>{e.preventDefault();const email=String(new FormData(invite).get('email')).trim().toLowerCase();const {error}=await sb.from('invitations').insert({org_id:org.id,email});if(error)return notice(error.message);notice('Invitation saved. Ask them to register with this email.','ok');loadTeam();};}
 async function loadTeam(){const [m,i]=await Promise.all([sb.from('memberships').select('user_id,role').eq('org_id',org.id),sb.from('invitations').select('email').eq('org_id',org.id)]);const team=document.getElementById('teamlist'),inv=document.getElementById('invitelist');if(team)team.innerHTML=m.error?esc(m.error.message):m.data.map(x=>`<div class="listrow">${esc(x.user_id===session.user.id?'You ('+session.user.email+')':x.user_id)} <strong>${esc(x.role)}</strong></div>`).join('');if(inv)inv.innerHTML=i.error?esc(i.error.message):i.data.map(x=>`<div class="listrow">${esc(x.email)}</div>`).join('')||'None';}
-
-async function start() {
-  if (!configured) {
-    showSetup();
-    return;
-  }
-
-  const { data, error } = await sb.auth.getSession();
-
-  if (error) {
-    showAuth();
-    return;
-  }
-
-  session = data.session;
-
-  const hash = new URLSearchParams(
-    window.location.hash.substring(1)
-  );
-
-  const isRecovery =
-    hash.get('type') === 'recovery';
-
-  sb.auth.onAuthStateChange((event, newSession) => {
-    session = newSession;
-
-    if (event === 'PASSWORD_RECOVERY') {
-      showPasswordReset();
-    }
-
-    if (event === 'SIGNED_OUT') {
-      session = null;
-      org = null;
-      showAuth();
-    }
-  });
-
-  if (isRecovery) {
-    showPasswordReset();
-    return;
-  }
-
-  await initialize();
-}
 async function start() {
   if (!configured) {
     showSetup();
