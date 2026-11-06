@@ -185,13 +185,117 @@ if(tab==='Receipts')content=`<div class="twocol"><section class="panel"><h2>Uplo
   type="file"
   name="file"
   accept="image/jpeg,image/png,image/webp,application/pdf"
-  required></label><label class="wide">Link to transaction (optional)<select name="transaction_id"><option value="">Unlinked receipt</option>${transactions.map(t=>`<option value="${t.id}">${esc(t.date+' · '+t.description+' · '+money(t.amount))}</option>`).join('')}</select></label><button class="wide">Upload securely</button></form></section><section class="panel"><h2>Stored documents</h2>${receipts.length?receipts.map(r=>`<div class="listrow"><div><strong>${esc(r.file_name)}</strong><small>${new Date(r.created_at).toLocaleDateString()}</small></div><button class="secondary" data-openreceipt="${r.file_path}">Open</button></div>`).join(''):'<p class="muted">No receipts uploaded yet.</p>'}</section></div>`;
+  required></label><label class="wide">Link to transaction (optional)<select name="transaction_id"><option value="">Unlinked receipt</option>${transactions.map(t=>`<option value="${t.id}">${esc(t.date+' · '+t.description+' · '+money(t.amount))}</option>`).join('')}</select></label><button class="wide">Upload securely</button></form></section><section class="panel"><h2>Stored documents</h2>${receipts.length?receipts.map(r=>`<div class="listrow"><div><strong>${esc(r.file_name)}</strong><small>${new Date(r.created_at).toLocaleDateString()}</small></div><
+<button class="secondary" type="button" data-openreceipt="${r.file_path}">Open</button><button class="secondary" type="button" data-editreceipt="${r.id}">Edit</button>
+</div>`).join(''):'<p class="muted">No receipts uploaded yet.</p>'}</section></div>`;
 if(tab==='Reminders')content=`<div class="twocol"><section class="panel"><h2>Schedule a reminder</h2><div id="notice" hidden></div><form id="reminderform" class="formgrid"><label class="wide">Title<input name="title" placeholder="Payroll, insurance renewal, accountant meeting…" required></label><label>Due date<input type="date" name="due_date" value="${today()}" required></label><label>Amount ($, optional)<input type="number" name="amount" min="0" step="0.01"></label><label>Type<select name="kind">${options(kinds)}</select></label><label>Repeat<select name="recurrence">${options(recur)}</select></label><button class="wide">Add reminder</button></form><p class="hint">This version shows reminders inside the app. Background phone push notifications are not enabled yet. Repeating items generate their next occurrence when marked complete.</p></section><section class="panel"><h2>Scheduled items</h2>${reminderList(reminders)}</section></div>`;
 if(tab==='Tax Center'){const annual=transactions.filter(x=>x.date?.startsWith(String(new Date().getFullYear()))&&x.type==='expense');const sums={};annual.forEach(x=>sums[x.category]=(sums[x.category]||0)+Number(x.amount));content=`<section class="panel"><h2>Tax preparation overview · ${new Date().getFullYear()}</h2><p class="muted">Expense categories are bookkeeping estimates, not automatically allowable deductions. Verify business purpose, substantiation, limitations, entity tax election, and shareholder reasonable compensation with your CPA.</p><div class="sectionhead"><strong>Operating expenses recorded: ${money(annual.reduce((a,x)=>a+Number(x.amount),0))}</strong><button id="exportcsv">Export transactions CSV</button></div><div class="tablewrap"><table><thead><tr><th>Category</th><th>Recorded amount</th></tr></thead><tbody>${Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${money(v)}</td></tr>`).join('')||'<tr><td colspan="2">No expenses recorded yet.</td></tr>'}</tbody></table></div><p class="hint">S-Corp filing (including Form 1120-S and K-1s), payroll tax returns, and deduction eligibility require additional validated workflows and professional review; this app does not file forms.</p></section>`;}
 if(tab==='Team')content=`<div class="twocol"><section class="panel"><h2>Invite a teammate</h2><p class="muted">Invite your wife or accountant by email. They create their own account and access the same organization records.</p><div id="notice" hidden></div><form id="inviteform" class="formgrid"><label class="wide">Email<input name="email" type="email" required placeholder="person@example.com"></label><button class="wide">Create invitation</button></form><p class="hint">Invitation records do not send emails automatically. Share your site address with the invitee, and have them sign up using the same email.</p></section><section class="panel"><h2>Team members</h2><div id="teamlist" class="muted">Loading…</div><h2>Pending invitations</h2><div id="invitelist" class="muted">Loading…</div></section></div>`;
 app.innerHTML=shell(content);bind();if(tab==='Team')loadTeam();}
-function txTable(rows){return `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr><td>${esc(t.date)}</td><td><strong>${esc(t.description)}</strong><small>${esc(t.category)} · ${esc(t.account)}</small></td><td>${esc(t.type)}</td><td>${money(t.amount)}</td><td><button class="iconbtn" title="Delete transaction" data-deletetx="${t.id}">×</button></td></tr>`).join('')||'<tr><td colspan="5">No transactions yet.</td></tr>'}</tbody></table></div>`;}
+function txTable(rows){return `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr><td>${esc(t.date)}</td><td><strong>${esc(t.description)}</strong><small>${esc(t.category)} · ${esc(t.account)}</small></td><td>${esc(t.type)}</td><td>${money(t.amount)}</td><td><
+<button class="secondary" type="button" data-edittx="${t.id}">Edit</button>
+<button class="iconbtn" type="button" title="Delete transaction" data-deletetx="${t.id}">×</button>
+</td></tr>`).join('')||'<tr><td colspan="5">No transactions yet.</td></tr>'}</tbody></table></div>`;}
 function reminderList(rows){return rows.length?rows.map(r=>`<div class="listrow"><div><strong>${esc(r.title)}</strong><small>${esc(r.due_date)} · ${esc(r.kind)} · ${esc(r.recurrence)} ${r.amount!=null?' · '+money(r.amount):''}</small></div><div class="rowactions">${r.completed?'<span class="done">Done</span>':`<button class="secondary" data-donerem="${r.id}">Done</button>`}<button class="iconbtn" data-deleterem="${r.id}" title="Delete">×</button></div></div>`).join(''):'<p class="muted">Nothing scheduled yet.</p>';}
+
+async function editTransaction(id) {
+  const t = transactions.find(x => String(x.id) === String(id));
+  if (!t) return alert('Transaction not found.');
+
+  const description = prompt('Description:', t.description || '');
+  if (description === null) return;
+  if (!description.trim()) return alert('Description is required.');
+
+  const amountText = prompt('Amount ($):', t.amount);
+  if (amountText === null) return;
+  const amount = Number(amountText);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return alert('Enter a valid amount greater than zero.');
+  }
+
+  const date = prompt('Date (YYYY-MM-DD):', t.date);
+  if (date === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      new Date(date + 'T12:00:00').toISOString().slice(0, 10) !== date) {
+    return alert('Enter a valid date in YYYY-MM-DD format.');
+  }
+
+  const category = prompt('Category:\n' + cats.join(', '), t.category);
+  if (category === null) return;
+  if (!cats.includes(category)) return alert('Choose a category from the list.');
+
+  const type = prompt('Type:\n' + types.join(', '), t.type);
+  if (type === null) return;
+  if (!types.includes(type)) return alert('Invalid transaction type.');
+
+  const account = prompt('Account:', t.account || '');
+  if (account === null) return;
+  if (!account.trim()) return alert('Account is required.');
+
+  const person = prompt('Person:', t.person || '');
+  if (person === null) return;
+
+  const notes = prompt('Notes:', t.notes || '');
+  if (notes === null) return;
+
+  const { error } = await sb.from('transactions')
+    .update({
+      description: description.trim(),
+      amount,
+      date,
+      category,
+      type,
+      account: account.trim(),
+      person,
+      notes
+    })
+    .eq('id', id)
+    .eq('org_id', org.id);
+
+  if (error) return alert('Update failed: ' + error.message);
+
+  await load();
+  alert('Transaction updated successfully!');
+}
+
+async function editReceipt(id) {
+  const r = receipts.find(x => String(x.id) === String(id));
+  if (!r) return alert('Receipt not found.');
+
+  const name = prompt('Receipt name:', r.file_name || '');
+  if (name === null) return;
+  if (!name.trim()) return alert('Receipt name is required.');
+
+  const linked = prompt(
+    'Linked transaction ID (leave blank for unlinked):\n\n' +
+    transactions.map(t =>
+      `${t.id} - ${t.description} - ${money(t.amount)}`
+    ).join('\n'),
+    r.transaction_id || ''
+  );
+
+  if (linked === null) return;
+
+  const transaction_id = linked.trim() || null;
+
+  if (transaction_id &&
+      !transactions.some(t => String(t.id) === transaction_id)) {
+    return alert('Transaction not found.');
+  }
+
+  const { error } = await sb.from('receipts')
+    .update({
+      file_name: name.trim(),
+      transaction_id
+    })
+    .eq('id', id)
+    .eq('org_id', org.id);
+
+  if (error) return alert('Update failed: ' + error.message);
+
+  await load();
+  alert('Receipt updated successfully!');
+}
 async function logout(){await sb.auth.signOut();session=null;org=null;showAuth();}
 async function submitRow(table,values){const {error}=await sb.from(table).insert({...values,org_id:org.id});if(error)throw error;await load();}
 function bind(){
@@ -203,6 +307,14 @@ function bind(){
   });
   document.getElementById('logout-sidebar')?.addEventListener('click', logout);
   document.getElementById('logout')?.addEventListener('click', logout);
+  
+document.querySelectorAll('[data-edittx]').forEach(button => {
+  button.onclick = () => editTransaction(button.dataset.edittx);
+});
+
+document.querySelectorAll('[data-editreceipt]').forEach(button => {
+  button.onclick = () => editReceipt(button.dataset.editreceipt);
+});
 const tx=document.getElementById('txform');if(tx)tx.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(tx));v.amount=Number(v.amount);await submitRow('transactions',v);}catch(err){notice(err.message);}finally{loading=false;}};
 const rem=document.getElementById('reminderform');if(rem)rem.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(rem));v.amount=v.amount?Number(v.amount):null;await submitRow('reminders',v);}catch(err){notice(err.message);}finally{loading=false;}};
 const rf=document.getElementById('receiptform');if(rf)rf.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const fd=new FormData(rf),file=fd.get('file');if(!(file instanceof File)||!file.size)throw Error('Choose a file');if(file.size>10485760)throw Error('File must be under 10 MB');if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type))throw Error('Unsupported file type');const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100),path=`${org.id}/${crypto.randomUUID()}-${safe}`;const up=await sb.storage.from('receipts').upload(path,file,{contentType:file.type,upsert:false});if(up.error)throw up.error;const {error}=await sb.from('receipts').insert({org_id:org.id,file_path:path,file_name:file.name,transaction_id:fd.get('transaction_id')||null});if(error){await sb.storage.from('receipts').remove([path]);throw error;}await load();}catch(err){notice(err.message);}finally{loading=false;}};
