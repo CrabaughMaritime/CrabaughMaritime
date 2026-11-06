@@ -174,10 +174,8 @@ function showPasswordReset() {
     }, 1500);
   };
 }
-const form=document.getElementById('authform');let mode='signin';form.querySelectorAll('button[type=submit]').forEach(b=>b.onclick=()=>mode=b.value);
-form.onsubmit=async e=>{e.preventDefault();const f=new FormData(form),email=f.get('email'),password=f.get('password');const {error,data}=mode==='signup'?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});if(error)return notice(error.message);if(mode==='signup'&&!data.session)return notice('Account created. Confirm your email, then sign in.','ok');session=data.session;await initialize();};}
 async function initialize(){if(!session){showAuth();return;}try{await sb.rpc('claim_my_invites');const {data,error}=await sb.from('memberships').select('org_id,role,organizations(id,name)').limit(1);if(error)throw error;if(!data?.length){showOrgCreate();return;}org=data[0].organizations;await load();}catch(e){app.innerHTML=`<section class="auth"><h2>Unable to load workspace</h2><p>${esc(e.message)}</p><button id="retry">Retry</button></section>`;document.getElementById('retry').onclick=initialize;}}
-function showOrgCreate(){app.innerHTML=`<section class="auth"><img src="/logo.jpg"><h1>Create your business workspace</h1><div id="notice" hidden></div><form id="orgform" class="panel"><label>Business name<input name="name" value="Crabaugh Maritime" required maxlength="100"></label><button>Create workspace</button></form><p class="muted">If you were invited, sign in using the exact invited email address.</p><button id="logout">Sign out</button></section>`;document.getElementById('logout').onclick=logout;document.getElementById('orgform').onsubmit=async e=>{e.preventDefault();const name=new FormData(e.target).get('name');const {data,error}=await sb.from('organizations').insert({name,owner_id:session.user.id}).select().single();if(error)return notice(error.message);const r=await sb.from('memberships').insert({org_id:data.id,user_id:session.user.id,role:'owner'});if(r.error)return notice('Workspace created, but membership setup failed: '+r.error.message);org=data;await load();};}
+function showOrgCreate(){app.innerHTML=`<section class="auth"><img src="${LOGO}"><h1>Create your business workspace</h1><div id="notice" hidden></div><form id="orgform" class="panel"><label>Business name<input name="name" value="Crabaugh Maritime" required maxlength="100"></label><button>Create workspace</button></form><p class="muted">If you were invited, sign in using the exact invited email address.</p><button id="logout">Sign out</button></section>`;document.getElementById('logout').onclick=logout;document.getElementById('orgform').onsubmit=async e=>{e.preventDefault();const name=new FormData(e.target).get('name');const {data,error}=await sb.from('organizations').insert({name,owner_id:session.user.id}).select().single();if(error)return notice(error.message);const r=await sb.from('memberships').insert({org_id:data.id,user_id:session.user.id,role:'owner'});if(r.error)return notice('Workspace created, but membership setup failed: '+r.error.message);org=data;await load();};}
 async function load(){const [t,r,f]=await Promise.all([sb.from('transactions').select('*').eq('org_id',org.id).order('date',{ascending:false}),sb.from('reminders').select('*').eq('org_id',org.id).order('due_date'),sb.from('receipts').select('*').eq('org_id',org.id).order('created_at',{ascending:false})]);const error=t.error||r.error||f.error;if(error)throw error;transactions=t.data||[];reminders=r.data||[];receipts=f.data||[];render();}
 function render(){let content='';const m=transactions.filter(x=>x.date?.startsWith(month())),exp=m.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount),0),pay=m.filter(x=>x.type==='payroll').reduce((a,x)=>a+Number(x.amount),0),income=m.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount),0);const upcoming=reminders.filter(x=>!x.completed).slice(0,8);
 if(tab==='Dashboard')content=`<div class="stats"><div class="stat"><span>MONTHLY INCOME</span><strong>${money(income)}</strong></div><div class="stat"><span>OPERATING EXPENSES</span><strong>${money(exp)}</strong></div><div class="stat"><span>PAYROLL TRANSFERS</span><strong>${money(pay)}</strong></div><div class="stat"><span>UPCOMING REMINDERS</span><strong>${upcoming.length}</strong></div></div><div class="twocol"><section class="panel"><div class="sectionhead"><h2>Recent transactions</h2><button data-tab="Transactions" class="linkbtn">View all</button></div>${txTable(transactions.slice(0,7))}</section><section class="panel"><div class="sectionhead"><h2>Upcoming</h2><button data-tab="Reminders" class="linkbtn">Manage</button></div>${reminderList(upcoming)}</section></div><p class="hint">Transfers and shareholder distributions are tracked separately from deductible operating expenses. Reports are informational, not filed tax returns.</p>`;
@@ -254,4 +252,53 @@ async function start() {
 
   await initialize();
 }
+async function start() {
+  if (!configured) {
+    showSetup();
+    return;
+  }
+
+  const hash = new URLSearchParams(
+    window.location.hash.substring(1)
+  );
+
+  const isRecovery =
+    hash.get('type') === 'recovery';
+
+  sb.auth.onAuthStateChange((event, newSession) => {
+    session = newSession;
+
+    if (event === 'PASSWORD_RECOVERY') {
+      showPasswordReset();
+      return;
+    }
+
+    if (event === 'SIGNED_OUT') {
+      session = null;
+      org = null;
+      showAuth();
+    }
+  });
+
+  try {
+    const { data, error } = await sb.auth.getSession();
+
+    if (error) throw error;
+
+    session = data.session;
+
+    if (isRecovery && session) {
+      showPasswordReset();
+      return;
+    }
+
+    await initialize();
+
+  } catch (error) {
+    console.error('Authentication startup error:', error);
+    showAuth();
+    notice('Unable to initialize authentication. Please try again.');
+  }
+}
+
 start();
