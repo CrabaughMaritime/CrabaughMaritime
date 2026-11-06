@@ -4,6 +4,7 @@ const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL, KEY=import.meta.env.VITE_S
 const configured=!!(SUPABASE_URL&&KEY&&SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('YOUR_'));
 const sb=configured?createClient(SUPABASE_URL,KEY):null;
 const app=document.getElementById('app');
+const LOGO = '/F00CE726-03EB-43DA-A800-E88A6CF4DD82.png';
 let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboard',loading=false;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
