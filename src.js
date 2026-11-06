@@ -9,9 +9,14 @@ let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboar
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const today=()=>new Date().toLocaleDateString('en-CA');
 const month=()=>today().slice(0,7);
-const options=(arr,selected='')=>arr.map(x=>`<option ${x===selected?'selected':''}>${esc(x)}</option>`).join('');
-const cats=['Travel','Fuel','Vessel supplies','Maintenance','Insurance','Medical','Software','Office','Meals','Professional fees','Training','Licenses','Phone & internet','Vehicle','Advertising','Payroll expense','Taxes','Other','Uncategorized'];
+const options=(arr,selected='')=>arr.map(x=>`<option value="${esc(x)}" ${x===selected?'selected':''}>${esc(x.charAt(0).toUpperCase()+x.slice(1))}</option>`).join('');const cats=['Travel','Fuel','Vessel supplies','Maintenance','Insurance','Medical','Software','Office','Meals','Professional fees','Training','Licenses','Phone & internet','Vehicle','Advertising','Payroll expense','Taxes','Other','Uncategorized'];
 const types=['expense','income','payroll','distribution','transfer','reimbursement'];
+const accounts=[
+  'Business Checking',
+  'Joint Account',
+  'Chris Personal Checking',
+  'Kayleen Personal Checking'
+];
 const kinds=['Payroll','Expense','Meeting','Tax','Accounting','Other'];
 const recur=['None','Weekly','Monthly','Quarterly','Yearly'];
 const shell=(content)=>`<div class="shell"><aside><div class="brand"><img src="${LOGO}" alt="Crabaugh Maritime logo"><div><strong>CRABAUGH</strong><small>MARITIME</small></div></div><nav>${['Dashboard','Transactions','Receipts','Payroll','Reminders','Tax Center','Team'].map(x=>`<button data-tab="${x}" class="${tab===x?'active':''}">${x}</button>`).join('')}</nav><div class="asidebottom"><span>${esc(session?.user?.email||'')}</span><button id="logout-sidebar">Sign out</button></div></aside><main><header><div><span class="eyebrow">BUSINESS WORKSPACE</span><h1>${esc(tab)}</h1></div><div class="topright"><span>${esc(org?.name||'Crabaugh Maritime')}</span><img src="${LOGO}" alt="logo"><button id="logout" type="button" style="background:#b91c1c;color:white;border:0;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;white-space:nowrap;">Sign Out</button></div></header><div class="content">${content}</div></main></div>`;
@@ -178,7 +183,7 @@ function showOrgCreate(){app.innerHTML=`<section class="auth"><img src="${LOGO}"
 async function load(){const [t,r,f]=await Promise.all([sb.from('transactions').select('*').eq('org_id',org.id).order('date',{ascending:false}),sb.from('reminders').select('*').eq('org_id',org.id).order('due_date'),sb.from('receipts').select('*').eq('org_id',org.id).order('created_at',{ascending:false})]);const error=t.error||r.error||f.error;if(error)throw error;transactions=t.data||[];reminders=r.data||[];receipts=f.data||[];render();}
 function render(){let content='';const m=transactions.filter(x=>x.date?.startsWith(month())),exp=m.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount),0),pay=m.filter(x=>x.type==='payroll').reduce((a,x)=>a+Number(x.amount),0),income=m.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount),0);const upcoming=reminders.filter(x=>!x.completed).slice(0,8);
 if(tab==='Dashboard')content=`<div class="stats"><div class="stat"><span>MONTHLY INCOME</span><strong>${money(income)}</strong></div><div class="stat"><span>OPERATING EXPENSES</span><strong>${money(exp)}</strong></div><div class="stat"><span>PAYROLL TRANSFERS</span><strong>${money(pay)}</strong></div><div class="stat"><span>UPCOMING REMINDERS</span><strong>${upcoming.length}</strong></div></div><div class="twocol"><section class="panel"><div class="sectionhead"><h2>Recent transactions</h2><button data-tab="Transactions" class="linkbtn">View all</button></div>${txTable(transactions.slice(0,7))}</section><section class="panel"><div class="sectionhead"><h2>Upcoming</h2><button data-tab="Reminders" class="linkbtn">Manage</button></div>${reminderList(upcoming)}</section></div><p class="hint">Transfers and shareholder distributions are tracked separately from deductible operating expenses. Reports are informational, not filed tax returns.</p>`;
-if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=`<div class="twocol"><section class="panel"><h2>${editingTransactionId?'Edit transaction':payroll?'Record payroll or distribution':'Add transaction'}</h2><div id="notice" hidden></div><form id="txform" class="formgrid"><label>Date<input type="date" name="date" value="${today()}" required></label><label>Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="wide">Description<input name="description" placeholder="Vendor or payment description" required maxlength="200"></label><label>Type<select name="type">${options(payroll?['payroll','distribution','reimbursement']:types,payroll?'payroll':'expense')}</select></label><label>Category<select name="category">${options(cats,payroll?'Payroll expense':'Uncategorized')}</select></label><label>Account<input name="account" value="Business checking" required></label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(transactions.filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
+if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=`<div class="twocol"><section class="panel"><h2>${editingTransactionId?'Edit transaction':payroll?'Record payroll or distribution':'Add transaction'}</h2><div id="notice" hidden></div><form id="txform" class="formgrid"><label>Date<input type="date" name="date" value="${today()}" required></label><label>Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="wide">Description<input name="description" placeholder="Vendor or payment description" required maxlength="200"></label><label>Type<select name="type">${options(payroll?['payroll','distribution','reimbursement']:types,payroll?'payroll':'expense')}</select></label><label>Category<select name="category">${options(cats,payroll?'Payroll expense':'Uncategorized')}</select></label><label>Account<select name="account" required>${options(accounts,'Business Checking')}</select></label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(transactions.filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
 if(tab==='Receipts')content=`<div class="twocol"><section class="panel"><h2>Upload receipt or invoice</h2><p class="muted">Take a photo on your phone or choose a PDF, JPEG, PNG, or WebP file (10 MB maximum).</p><div id="notice" hidden></div><form id="receiptform" class="formgrid"><label class="wide">Receipt or invoice<
 <input
   type="file"
@@ -191,7 +196,7 @@ if(tab==='Reminders')content=`<div class="twocol"><section class="panel"><h2>Sch
 if(tab==='Tax Center'){const annual=transactions.filter(x=>x.date?.startsWith(String(new Date().getFullYear()))&&x.type==='expense');const sums={};annual.forEach(x=>sums[x.category]=(sums[x.category]||0)+Number(x.amount));content=`<section class="panel"><h2>Tax preparation overview · ${new Date().getFullYear()}</h2><p class="muted">Expense categories are bookkeeping estimates, not automatically allowable deductions. Verify business purpose, substantiation, limitations, entity tax election, and shareholder reasonable compensation with your CPA.</p><div class="sectionhead"><strong>Operating expenses recorded: ${money(annual.reduce((a,x)=>a+Number(x.amount),0))}</strong><button id="exportcsv">Export transactions CSV</button></div><div class="tablewrap"><table><thead><tr><th>Category</th><th>Recorded amount</th></tr></thead><tbody>${Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${money(v)}</td></tr>`).join('')||'<tr><td colspan="2">No expenses recorded yet.</td></tr>'}</tbody></table></div><p class="hint">S-Corp filing (including Form 1120-S and K-1s), payroll tax returns, and deduction eligibility require additional validated workflows and professional review; this app does not file forms.</p></section>`;}
 if(tab==='Team')content=`<div class="twocol"><section class="panel"><h2>Invite a teammate</h2><p class="muted">Invite your wife or accountant by email. They create their own account and access the same organization records.</p><div id="notice" hidden></div><form id="inviteform" class="formgrid"><label class="wide">Email<input name="email" type="email" required placeholder="person@example.com"></label><button class="wide">Create invitation</button></form><p class="hint">Invitation records do not send emails automatically. Share your site address with the invitee, and have them sign up using the same email.</p></section><section class="panel"><h2>Team members</h2><div id="teamlist" class="muted">Loading…</div><h2>Pending invitations</h2><div id="invitelist" class="muted">Loading…</div></section></div>`;
 app.innerHTML=shell(content);bind();if(tab==='Team')loadTeam();}
-function txTable(rows){return `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr><td>${esc(t.date)}</td><td><strong>${esc(t.description)}</strong><small>${esc(t.category)} · ${esc(t.account)}</small></td><td>${esc(t.type)}</td><td>${money(t.amount)}</td><td><
+function txTable(rows){return `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr><td>${esc(t.date)}</td><td><strong>${esc(t.description)}</strong><small>${esc(t.category)} · ${esc(t.account === 'Business checking' ? 'Business Checking' : t.account)}</small></td><td>${esc(t.type.charAt(0).toUpperCase()+t.type.slice(1))}</td><td>${money(t.amount)}</td><td><
 <button class="secondary" type="button" data-edittx="${t.id}">Edit</button>
 <button class="iconbtn" type="button" title="Delete transaction" data-deletetx="${t.id}">×</button>
 </td></tr>`).join('')||'<tr><td colspan="5">No transactions yet.</td></tr>'}</tbody></table></div>`;}
@@ -226,10 +231,23 @@ function editTransaction(id) {
     'person',
     'notes'
   ]) {
-    if (form.elements[field]) {
-      form.elements[field].value = t[field] ?? '';
+   if (form.elements[field]) {
+  if (field === 'account') {
+    const savedAccount = t[field] === 'Business checking'
+      ? 'Business Checking'
+      : t[field];
+
+    if (savedAccount && !accounts.includes(savedAccount)) {
+      form.elements[field].add(
+        new Option(savedAccount, savedAccount)
+      );
     }
+
+    form.elements[field].value = savedAccount || 'Business Checking';
+  } else {
+    form.elements[field].value = t[field] ?? '';
   }
+}  }
 
   form.scrollIntoView({
     behavior: 'smooth',
