@@ -5,8 +5,7 @@ const configured=!!(SUPABASE_URL&&KEY&&SUPABASE_URL.startsWith('https://')&&!SUP
 const sb=configured?createClient(SUPABASE_URL,KEY):null;
 const app = document.getElementById('app');
 const LOGO = '/F00CE726-03EB-43DA-A800-E88A6CF4DD82.png';
-let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboard',loading=false;
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboard',loading=false,editingTransactionId=null;const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const today=()=>new Date().toLocaleDateString('en-CA');
 const month=()=>today().slice(0,7);
@@ -179,7 +178,7 @@ function showOrgCreate(){app.innerHTML=`<section class="auth"><img src="${LOGO}"
 async function load(){const [t,r,f]=await Promise.all([sb.from('transactions').select('*').eq('org_id',org.id).order('date',{ascending:false}),sb.from('reminders').select('*').eq('org_id',org.id).order('due_date'),sb.from('receipts').select('*').eq('org_id',org.id).order('created_at',{ascending:false})]);const error=t.error||r.error||f.error;if(error)throw error;transactions=t.data||[];reminders=r.data||[];receipts=f.data||[];render();}
 function render(){let content='';const m=transactions.filter(x=>x.date?.startsWith(month())),exp=m.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount),0),pay=m.filter(x=>x.type==='payroll').reduce((a,x)=>a+Number(x.amount),0),income=m.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount),0);const upcoming=reminders.filter(x=>!x.completed).slice(0,8);
 if(tab==='Dashboard')content=`<div class="stats"><div class="stat"><span>MONTHLY INCOME</span><strong>${money(income)}</strong></div><div class="stat"><span>OPERATING EXPENSES</span><strong>${money(exp)}</strong></div><div class="stat"><span>PAYROLL TRANSFERS</span><strong>${money(pay)}</strong></div><div class="stat"><span>UPCOMING REMINDERS</span><strong>${upcoming.length}</strong></div></div><div class="twocol"><section class="panel"><div class="sectionhead"><h2>Recent transactions</h2><button data-tab="Transactions" class="linkbtn">View all</button></div>${txTable(transactions.slice(0,7))}</section><section class="panel"><div class="sectionhead"><h2>Upcoming</h2><button data-tab="Reminders" class="linkbtn">Manage</button></div>${reminderList(upcoming)}</section></div><p class="hint">Transfers and shareholder distributions are tracked separately from deductible operating expenses. Reports are informational, not filed tax returns.</p>`;
-if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=`<div class="twocol"><section class="panel"><h2>${payroll?'Record payroll or distribution':'Add transaction'}</h2><div id="notice" hidden></div><form id="txform" class="formgrid"><label>Date<input type="date" name="date" value="${today()}" required></label><label>Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="wide">Description<input name="description" placeholder="Vendor or payment description" required maxlength="200"></label><label>Type<select name="type">${options(payroll?['payroll','distribution','reimbursement']:types,payroll?'payroll':'expense')}</select></label><label>Category<select name="category">${options(cats,payroll?'Payroll expense':'Uncategorized')}</select></label><label>Account<input name="account" value="Business checking" required></label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">Save transaction</button></form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(transactions.filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
+if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=`<div class="twocol"><section class="panel"><h2>${editingTransactionId?'Edit transaction':payroll?'Record payroll or distribution':'Add transaction'}</h2><div id="notice" hidden></div><form id="txform" class="formgrid"><label>Date<input type="date" name="date" value="${today()}" required></label><label>Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="wide">Description<input name="description" placeholder="Vendor or payment description" required maxlength="200"></label><label>Type<select name="type">${options(payroll?['payroll','distribution','reimbursement']:types,payroll?'payroll':'expense')}</select></label><label>Category<select name="category">${options(cats,payroll?'Payroll expense':'Uncategorized')}</select></label><label>Account<input name="account" value="Business checking" required></label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(transactions.filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
 if(tab==='Receipts')content=`<div class="twocol"><section class="panel"><h2>Upload receipt or invoice</h2><p class="muted">Take a photo on your phone or choose a PDF, JPEG, PNG, or WebP file (10 MB maximum).</p><div id="notice" hidden></div><form id="receiptform" class="formgrid"><label class="wide">Receipt or invoice<
 <input
   type="file"
@@ -197,68 +196,46 @@ function txTable(rows){return `<div class="tablewrap"><table><thead><tr><th>Date
 <button class="iconbtn" type="button" title="Delete transaction" data-deletetx="${t.id}">×</button>
 </td></tr>`).join('')||'<tr><td colspan="5">No transactions yet.</td></tr>'}</tbody></table></div>`;}
 function reminderList(rows){return rows.length?rows.map(r=>`<div class="listrow"><div><strong>${esc(r.title)}</strong><small>${esc(r.due_date)} · ${esc(r.kind)} · ${esc(r.recurrence)} ${r.amount!=null?' · '+money(r.amount):''}</small></div><div class="rowactions">${r.completed?'<span class="done">Done</span>':`<button class="secondary" data-donerem="${r.id}">Done</button>`}<button class="iconbtn" data-deleterem="${r.id}" title="Delete">×</button></div></div>`).join(''):'<p class="muted">Nothing scheduled yet.</p>';}
-
-async function editTransaction(id) {
+function editTransaction(id) {
   const t = transactions.find(x => String(x.id) === String(id));
-  if (!t) return alert('Transaction not found.');
 
-  const description = prompt('Description:', t.description || '');
-  if (description === null) return;
-  if (!description.trim()) return alert('Description is required.');
-
-  const amountText = prompt('Amount ($):', t.amount);
-  if (amountText === null) return;
-  const amount = Number(amountText);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return alert('Enter a valid amount greater than zero.');
+  if (!t) {
+    alert('Transaction not found.');
+    return;
   }
 
-  const date = prompt('Date (YYYY-MM-DD):', t.date);
-  if (date === null) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-      new Date(date + 'T12:00:00').toISOString().slice(0, 10) !== date) {
-    return alert('Enter a valid date in YYYY-MM-DD format.');
+  editingTransactionId = t.id;
+
+  tab = ['payroll','distribution','reimbursement'].includes(t.type)
+    ? 'Payroll'
+    : 'Transactions';
+
+  render();
+
+  const form = document.getElementById('txform');
+
+  if (!form) return;
+
+  for (const field of [
+    'date',
+    'amount',
+    'description',
+    'type',
+    'category',
+    'account',
+    'person',
+    'notes'
+  ]) {
+    if (form.elements[field]) {
+      form.elements[field].value = t[field] ?? '';
+    }
   }
 
-  const category = prompt('Category:\n' + cats.join(', '), t.category);
-  if (category === null) return;
-  if (!cats.includes(category)) return alert('Choose a category from the list.');
-
-  const type = prompt('Type:\n' + types.join(', '), t.type);
-  if (type === null) return;
-  if (!types.includes(type)) return alert('Invalid transaction type.');
-
-  const account = prompt('Account:', t.account || '');
-  if (account === null) return;
-  if (!account.trim()) return alert('Account is required.');
-
-  const person = prompt('Person:', t.person || '');
-  if (person === null) return;
-
-  const notes = prompt('Notes:', t.notes || '');
-  if (notes === null) return;
-
-  const { error } = await sb.from('transactions')
-    .update({
-      description: description.trim(),
-      amount,
-      date,
-      category,
-      type,
-      account: account.trim(),
-      person,
-      notes
-    })
-    .eq('id', id)
-    .eq('org_id', org.id);
-
-  if (error) return alert('Update failed: ' + error.message);
-
-  await load();
-  alert('Transaction updated successfully!');
-}
-
-async function editReceipt(id) {
+  form.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+}async function editReceipt(id) {
   const r = receipts.find(x => String(x.id) === String(id));
   if (!r) return alert('Receipt not found.');
 
@@ -315,8 +292,51 @@ document.querySelectorAll('[data-edittx]').forEach(button => {
 document.querySelectorAll('[data-editreceipt]').forEach(button => {
   button.onclick = () => editReceipt(button.dataset.editreceipt);
 });
-const tx=document.getElementById('txform');if(tx)tx.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(tx));v.amount=Number(v.amount);await submitRow('transactions',v);}catch(err){notice(err.message);}finally{loading=false;}};
-const rem=document.getElementById('reminderform');if(rem)rem.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(rem));v.amount=v.amount?Number(v.amount):null;await submitRow('reminders',v);}catch(err){notice(err.message);}finally{loading=false;}};
+const tx = document.getElementById('txform');
+
+if (tx) {
+  tx.onsubmit = async e => {
+    e.preventDefault();
+
+    if (loading) return;
+    loading = true;
+
+    try {
+      const v = Object.fromEntries(new FormData(tx));
+      v.amount = Number(v.amount);
+
+      if (editingTransactionId !== null) {
+        const { data, error } = await sb
+          .from('transactions')
+          .update(v)
+          .eq('id', editingTransactionId)
+          .eq('org_id', org.id)
+          .select('id');
+
+        if (error) throw error;
+        if (!data?.length) {
+          throw Error('Transaction not updated. Check your permissions.');
+        }
+
+        editingTransactionId = null;
+        await load();
+        alert('Transaction updated successfully!');
+      } else {
+        await submitRow('transactions', v);
+      }
+    } catch (err) {
+      notice(err.message);
+    } finally {
+      loading = false;
+    }
+  };
+}
+
+document.getElementById('cancel-edit-tx')?.addEventListener('click', () => {
+  editingTransactionId = null;
+  render();
+});
+  const rem=document.getElementById('reminderform');if(rem)rem.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(rem));v.amount=v.amount?Number(v.amount):null;await submitRow('reminders',v);}catch(err){notice(err.message);}finally{loading=false;}};
 const rf=document.getElementById('receiptform');if(rf)rf.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const fd=new FormData(rf),file=fd.get('file');if(!(file instanceof File)||!file.size)throw Error('Choose a file');if(file.size>10485760)throw Error('File must be under 10 MB');if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type))throw Error('Unsupported file type');const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100),path=`${org.id}/${crypto.randomUUID()}-${safe}`;const up=await sb.storage.from('receipts').upload(path,file,{contentType:file.type,upsert:false});if(up.error)throw up.error;const {error}=await sb.from('receipts').insert({org_id:org.id,file_path:path,file_name:file.name,transaction_id:fd.get('transaction_id')||null});if(error){await sb.storage.from('receipts').remove([path]);throw error;}await load();}catch(err){notice(err.message);}finally{loading=false;}};
 document.querySelectorAll('[data-openreceipt]').forEach(b=>b.onclick=async()=>{const {data,error}=await sb.storage.from('receipts').createSignedUrl(b.dataset.openreceipt,60);if(error)alert(error.message);else window.open(data.signedUrl,'_blank','noopener,noreferrer');});
 document.querySelectorAll('[data-deletetx]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this transaction?'))return;const {error}=await sb.from('transactions').delete().eq('id',b.dataset.deletetx).eq('org_id',org.id);if(error)alert(error.message);else await load();});
