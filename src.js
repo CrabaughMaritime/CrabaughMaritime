@@ -43,8 +43,8 @@ function showAuth() {
         <form id="authform">
           <label>Email
             <input name="email" type="email" required
-              autocomplete="email" placeholder="you@example.com">
-          </label>
+              autocomplete="username" placeholder="you@example.com">
+              </label>
           <label>Password
             <input name="password" type="password" minlength="8"
               required autocomplete="current-password">
