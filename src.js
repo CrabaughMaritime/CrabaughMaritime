@@ -14,10 +14,12 @@ const types=['expense','income','payroll','distribution','transfer','reimburseme
 const accounts=[
   'Business Checking',
   'Joint Account',
+  'Chris Business Credit Card',
+  'Kayleen Business Credit Card',
   'Chris Personal Checking',
-  'Kayleen Personal Checking',
   'Chris Chase Credit Card',
   'Chris BofA Credit Card',
+  'Kayleen Personal Checking',
   'Kayleen Chase Credit Card',
   'Kayleen Amex'
 ];
