@@ -3,7 +3,7 @@ import './style.css';
 const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL, KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const configured=!!(SUPABASE_URL&&KEY&&SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('YOUR_'));
 const sb=configured?createClient(SUPABASE_URL,KEY):null;
-const app=document.getElementById('app'); document.getElementById('logout-sidebar').onclick=logout;
+const app = document.getElementById('app');
 const LOGO = '/F00CE726-03EB-43DA-A800-E88A6CF4DD82.png';
 let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboard',loading=false;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -36,7 +36,15 @@ function txTable(rows){return `<div class="tablewrap"><table><thead><tr><th>Date
 function reminderList(rows){return rows.length?rows.map(r=>`<div class="listrow"><div><strong>${esc(r.title)}</strong><small>${esc(r.due_date)} · ${esc(r.kind)} · ${esc(r.recurrence)} ${r.amount!=null?' · '+money(r.amount):''}</small></div><div class="rowactions">${r.completed?'<span class="done">Done</span>':`<button class="secondary" data-donerem="${r.id}">Done</button>`}<button class="iconbtn" data-deleterem="${r.id}" title="Delete">×</button></div></div>`).join(''):'<p class="muted">Nothing scheduled yet.</p>';}
 async function logout(){await sb.auth.signOut();session=null;org=null;showAuth();}
 async function submitRow(table,values){const {error}=await sb.from(table).insert({...values,org_id:org.id});if(error)throw error;await load();}
-function bind(){document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();});document.getElementById('logout').onclick=logout;
+function bind(){
+  document.querySelectorAll('[data-tab]').forEach(b => {
+    b.onclick = () => {
+      tab = b.dataset.tab;
+      render();
+    };
+  });
+  document.getElementById('logout-sidebar')?.addEventListener('click', logout);
+  document.getElementById('logout')?.addEventListener('click', logout);
 const tx=document.getElementById('txform');if(tx)tx.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(tx));v.amount=Number(v.amount);await submitRow('transactions',v);}catch(err){notice(err.message);}finally{loading=false;}};
 const rem=document.getElementById('reminderform');if(rem)rem.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const v=Object.fromEntries(new FormData(rem));v.amount=v.amount?Number(v.amount):null;await submitRow('reminders',v);}catch(err){notice(err.message);}finally{loading=false;}};
 const rf=document.getElementById('receiptform');if(rf)rf.onsubmit=async e=>{e.preventDefault();if(loading)return;loading=true;try{const fd=new FormData(rf),file=fd.get('file');if(!(file instanceof File)||!file.size)throw Error('Choose a file');if(file.size>10485760)throw Error('File must be under 10 MB');if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type))throw Error('Unsupported file type');const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100),path=`${org.id}/${crypto.randomUUID()}-${safe}`;const up=await sb.storage.from('receipts').upload(path,file,{contentType:file.type,upsert:false});if(up.error)throw up.error;const {error}=await sb.from('receipts').insert({org_id:org.id,file_path:path,file_name:file.name,transaction_id:fd.get('transaction_id')||null});if(error){await sb.storage.from('receipts').remove([path]);throw error;}await load();}catch(err){notice(err.message);}finally{loading=false;}};
