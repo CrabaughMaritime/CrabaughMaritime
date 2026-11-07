@@ -21,6 +21,7 @@ const accounts=[
   'Chris BofA Credit Card',
   'Kayleen Personal Checking',
   'Kayleen Chase Credit Card',
+  'Kayleen Personal Chase Credit Card',
   'Kayleen Amex'
 ];
 const kinds=['Payroll','Expense','Meeting','Tax','Accounting','Other'];
