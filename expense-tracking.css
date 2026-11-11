@@ -1,1 +1,25 @@
-
+button.brand, button.topright { background: transparent; text-align: left; }
+button.topright { padding: 0; }
+.expense-chart { margin-bottom: 20px; }
+.chart-body { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.donut { display: grid; place-items: center; flex: 0 0 auto; width: min(190px, 100%); aspect-ratio: 1; border-radius: 50%; }
+.donut > div { display: grid; align-content: center; justify-items: center; gap: 4px; width: 77%; aspect-ratio: 1; border-radius: 50%; background: white; text-align: center; }
+.donut small { color: #4b6072; }
+.donut strong { font-size: clamp(.8rem, 3vw, 1rem); }
+.chart-legend { list-style: none; padding: 0; margin: 0; flex: 1 1 210px; }
+.chart-legend li { display: grid; grid-template-columns: 10px minmax(0,1fr) auto auto; align-items: center; gap: 8px; padding: 5px 0; font-size: .83rem; overflow-wrap: anywhere; }
+.chart-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.expense-sheet, .bank-panel { margin-bottom: 20px; }
+.expense-sheet .formgrid, .sheet-pages { margin: 12px 0; }
+button:disabled { opacity: .55; cursor: default; }
+dialog { width: min(560px, calc(100% - 24px)); max-height: 90dvh; border: 1px solid #d5dee5; border-radius: 14px; padding: 22px; color: #10253a; }
+dialog::backdrop { background: #091b2b99; }
+.receipt-item, .bank-account { padding: 14px 0; border-bottom: 1px solid #edf0f3; overflow-wrap: anywhere; }
+.header-actions { display: flex; gap: 12px; align-items: center; }
+.bank-account h3 { margin: 0; color: #10253a; font-size: 1rem; }
+.bank-account p { margin: 0; }
+@media (max-width: 680px) {
+  .header-actions { gap: 8px; }
+  .chart-body { gap: 12px; }
+  .chart-legend { flex-basis: 100%; }
+}
