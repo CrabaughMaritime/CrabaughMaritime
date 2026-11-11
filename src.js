@@ -3,14 +3,14 @@ import './style.css';
 import './expense-tracking.css';
 import { expenseDonut, expenseTracking, bindExpenseTracking } from './expenses.js';
 import { receiptTools } from './receipts.js';
-import { bankPanel, bindBankPanel, openReconciliation } from './bank.js';const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL, KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { bankPanel, bindBankPanel, openReconciliation } from './bank.js';
+const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL, KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const configured=!!(SUPABASE_URL&&KEY&&SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('YOUR_'));
 const sb=configured?createClient(SUPABASE_URL,KEY):null;
 const app = document.getElementById('app');
-const expenseFilters = {};
 const LOGO = '/F00CE726-03EB-43DA-A800-E88A6CF4DD82.png';
 const expenseFilters = {};
-let workspaceRole = null;let workspaceRole = null;
+let workspaceRole = null;
 let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboard',loading=false,editingTransactionId=null;const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const today=()=>new Date().toLocaleDateString('en-CA');
@@ -35,8 +35,8 @@ const recur=['None','Weekly','Monthly','Quarterly','Yearly'];
 const shell=(content)=>`<div class="shell"><aside><button type="button" class="brand" data-tab="Dashboard" aria-label="Crabaugh Maritime Dashboard"><img src="${LOGO}" alt=""><span><strong>CRABAUGH</strong><small>MARITIME</small></span></button><nav>${['Dashboard','Expense Tracking','Transactions','Receipts','Payroll','Reminders','Tax Center','Team'].map(x=>`<button data-tab="${x}" class="${tab===x?'active':''}">${x}</button>`).join('')}</nav><div class="asidebottom"><span>${esc(session?.user?.email||'')}</span><button id="logout-sidebar">Sign out</button></div></aside><main><header><div><span class="eyebrow">BUSINESS WORKSPACE</span><h1>${esc(tab)}</h1></div><div class="header-actions"><button type="button" class="topright" data-tab="Dashboard" aria-label="Crabaugh Maritime Dashboard"><span>${esc(org?.name||'Crabaugh Maritime')}</span><img src="${LOGO}" alt=""></button><button id="logout" type="button" style="background:#b91c1c;color:white;border:0;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;white-space:nowrap;">Sign Out</button></div></header><div class="content">${content}</div></main></div>`;
 function notice(message,kind='error'){const el=document.getElementById('notice');if(el){el.textContent=message;el.className='notice '+kind;el.hidden=false;}}
 function showSetup(){app.innerHTML=`<section class="auth"><img src="${LOGO}"><h1>Crabaugh Maritime</h1><p>Deployment configuration is required. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in Vercel, then redeploy.</p><p>Follow the included README.md to create the Supabase database and security policies.</p></section>`;}
-
-app.onclick = null;
+function showAuth() {
+  app.onclick = null;
   app.innerHTML = `
     <section class="auth">
       <img src="${LOGO}" alt="Crabaugh Maritime">
@@ -135,8 +135,8 @@ app.onclick = null;
     }
   };
 }
-
-app.onclick = null;
+function showPasswordReset() {
+  app.onclick = null;
   app.innerHTML = `
     <section class="auth">
       <img src="${LOGO}" alt="Crabaugh Maritime">
@@ -318,7 +318,8 @@ async function submitRow(table,values){const {error}=await sb.from(table).insert
 function bind(){
   document.querySelectorAll('[data-tab]').forEach(b => {
     b.onclick = () => {
-       editingTransactionId = null
+           tab = b.dataset.tab;
+      editingTransactionId = null;
       render();
     };
   });
@@ -457,10 +458,10 @@ async function start() {
     notice('Unable to initialize authentication. Please try again.');
   }
 }
-
-start();// The archived starter assets have a JPG fallback. The deployed PNG is preferred.
+  // The archived starter assets have a JPG fallback. The deployed PNG is preferred.
 app.addEventListener('error', event => {
   if (event.target instanceof HTMLImageElement && event.target.getAttribute('src') === LOGO) {
     event.target.src = '/logo.jpg';
   }
 }, true);
+start();
