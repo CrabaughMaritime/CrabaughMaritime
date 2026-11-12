@@ -501,7 +501,7 @@ function bind(){
   
  const tools = getReceiptTools();
   const upload = document.getElementById('receipt-upload');
-  if (upload) tools.bindForm(upload);
+  if (upload) tools.bindForm(upload);   tools.bindThumbnails(app);
   bindExpenseTracking(transactions.map(t => ({ ...t, account: accountName(t.account) })), expenseFilters, {
     esc, money, actions: transactionActions
   });
@@ -514,7 +514,7 @@ function bind(){
     const action = button.dataset;
     if (action.edittx) editTransaction(action.edittx);
     if (action.txreceipt) tools.openDialog(null, action.txreceipt);
-    if (action.openreceipt) await tools.download(action.openreceipt);
+    if (action.openreceipt) await tools.preview(action.openreceipt);
     if (action.editreceipt) {
       const receipt = receipts.find(r => r.id === action.editreceipt);
       if (receipt) tools.openDialog(receipt);
