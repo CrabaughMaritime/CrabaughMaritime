@@ -4,6 +4,10 @@ import './expense-tracking.css';
 import { expenseDonut, expenseTracking, bindExpenseTracking } from './expenses.js';
 import { receiptTools } from './receipts.js';
 import { bankPanel, bindBankPanel, openReconciliation } from './bank.js';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+GlobalWorkerOptions.workerSrc = pdfWorker;
 const SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL, KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const configured=!!(SUPABASE_URL&&KEY&&SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('YOUR_'));
 const sb=configured?createClient(SUPABASE_URL,KEY):null;
