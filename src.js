@@ -10,7 +10,7 @@ const sb=configured?createClient(SUPABASE_URL,KEY):null;
 const app = document.getElementById('app');
 const LOGO = '/F00CE726-03EB-43DA-A800-E88A6CF4DD82.png';
 const expenseFilters = {};
-let workspaceRole = null;
+let workspaceRole = null; let vendors = [];
 let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboard',loading=false,editingTransactionId=null;const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const today=()=>new Date().toLocaleDateString('en-CA');
@@ -211,19 +211,28 @@ async function readWorkspaceRows(table, orgId) {
 async function load() {
   const orgId = org.id;
   const userId = session.user.id;
-  const [ledger, reminderResult, files] = await Promise.all([
+
+  const [ledger, reminderResult, files, vendorRows] = await Promise.all([
     readWorkspaceRows('transactions', orgId),
     sb.from('reminders').select('*').eq('org_id', orgId).order('due_date'),
-    readWorkspaceRows('receipts', orgId)
+    readWorkspaceRows('receipts', orgId),
+    readWorkspaceRows('vendors', orgId)
   ]);
+
   if (reminderResult.error) throw reminderResult.error;
   if (org?.id !== orgId || session?.user.id !== userId) return;
-  transactions = ledger.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+
+  transactions = ledger.sort(
+    (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
+  );
   reminders = reminderResult.data || [];
-  receipts = files.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  receipts = files.sort(
+    (a, b) => (b.created_at || '').localeCompare(a.created_at || '')
+  );
+  vendors = vendorRows.sort((a, b) => a.name.localeCompare(b.name));
+
   render();
 }
-
 const accountName = name => name === 'Business checking' ? 'Business Checking' : name;
 const accountOptions = () => [...new Set([...accounts, ...transactions.map(t => accountName(t.account)).filter(Boolean)])];
 const currentTransactions = () => transactions.filter(t => !t.bank_removed);
@@ -570,7 +579,11 @@ const exportButton=document.getElementById('exportcsv');if(exportButton)exportBu
   return '"'+safe.replaceAll('"','""')+'"';
 }).join(','))].join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='crabaugh-maritime-transactions.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
 const invite=document.getElementById('inviteform');if(invite)invite.onsubmit=async e=>{e.preventDefault();const email=String(new FormData(invite).get('email')).trim().toLowerCase();const {error}=await sb.from('invitations').insert({org_id:org.id,email});if(error)return notice(error.message);notice('Invitation saved. Ask them to register with this email.','ok');loadTeam();};}
-async function loadTeam(){const [m,i]=await Promise.all([sb.from('memberships').select('user_id,role').eq('org_id',org.id),sb.from('invitations').select('email').eq('org_id',org.id)]);const team=document.getElementById('teamlist'),inv=document.getElementById('invitelist');if(team)team.innerHTML=m.error?esc(m.error.message):m.data.map(x=>`<div class="listrow">${esc(x.user_id===session.user.id?'You ('+session.user.email+')':x.user_id)} <strong>${esc(x.role)}</strong></div>`).join('');if(inv)inv.innerHTML=i.error?esc(i.error.message):i.data.map(x=>`<div class="listrow">${esc(x.email)}</div>`).join('')||'None';}
+async function loadTeam(){const [m,i]=await Promise.all([sb.from('memberships').select('user_id,role').eq('org_id',org.id),sb.from('invitations').select('email').eq('org_id',org.id)]);const team=document.getElementById('teamlist'),inv=document.getElementById('invitelist');if(team)team.innerHTML=m.error?esc(m.error.message):m.data.map(x=>`<div class="listrow">${esc(x.user_id === '1ae5cc78-1576-4a2d-9049-890a59b4b961'
+  ? 'Kayleen'
+  : x.user_id === session.user.id
+    ? 'You (' + session.user.email + ')'
+    : 'Team member')} <strong>${esc(x.role)}</strong></div>`).join('');if(inv)inv.innerHTML=i.error?esc(i.error.message):i.data.map(x=>`<div class="listrow">${esc(x.email)}</div>`).join('')||'None';}
 async function start() {
   if (!configured) {
     showSetup();
