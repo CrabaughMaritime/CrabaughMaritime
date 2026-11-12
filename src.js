@@ -32,7 +32,7 @@ const accounts=[
 ];
 const kinds=['Payroll','Expense','Meeting','Tax','Accounting','Other'];
 const recur=['None','Weekly','Monthly','Quarterly','Yearly'];
-const shell=(content)=>`<div class="shell"><aside><button type="button" class="brand" data-tab="Dashboard" aria-label="Crabaugh Maritime Dashboard"><img src="${LOGO}" alt=""><span><strong>CRABAUGH</strong><small>MARITIME</small></span></button><nav>${['Dashboard','Expense Tracking','Transactions','Receipts','Payroll','Reminders','Tax Center','Team'].map(x=>`<button data-tab="${x}" class="${tab===x?'active':''}">${x}</button>`).join('')}</nav><div class="asidebottom"><span>${esc(session?.user?.email||'')}</span><button id="logout-sidebar">Sign out</button></div></aside><main><header><div><span class="eyebrow">BUSINESS WORKSPACE</span><h1>${esc(tab)}</h1></div><div class="header-actions"><button type="button" class="topright" data-tab="Dashboard" aria-label="Crabaugh Maritime Dashboard"><span>${esc(org?.name||'Crabaugh Maritime')}</span><img src="${LOGO}" alt=""></button><button id="logout" type="button" style="background:#b91c1c;color:white;border:0;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;white-space:nowrap;">Sign Out</button></div></header><div class="content">${content}</div></main></div>`;
+const shell=(content)=>`<div class="shell"><aside><button type="button" class="brand" data-tab="Dashboard" aria-label="Crabaugh Maritime Dashboard"><img src="${LOGO}" alt=""><span><strong>CRABAUGH</strong><small>MARITIME</small></span></button><nav>${['Dashboard','Expense Tracking','Transactions','Vendors','Receipts','Payroll','Reminders','Tax Center','Team'].map(x=>`<button data-tab="${x}" class="${tab===x?'active':''}">${x}</button>`).join('')}</nav><div class="asidebottom"><span>${esc(session?.user?.email||'')}</span><button id="logout-sidebar">Sign out</button></div></aside><main><header><div><span class="eyebrow">BUSINESS WORKSPACE</span><h1>${esc(tab)}</h1></div><div class="header-actions"><button type="button" class="topright" data-tab="Dashboard" aria-label="Crabaugh Maritime Dashboard"><span>${esc(org?.name||'Crabaugh Maritime')}</span><img src="${LOGO}" alt=""></button><button id="logout" type="button" style="background:#b91c1c;color:white;border:0;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;white-space:nowrap;">Sign Out</button></div></header><div class="content">${content}</div></main></div>`;
 function notice(message,kind='error'){const el=document.getElementById('notice');if(el){el.textContent=message;el.className='notice '+kind;el.hidden=false;}}
 function showSetup(){app.innerHTML=`<section class="auth"><img src="${LOGO}"><h1>Crabaugh Maritime</h1><p>Deployment configuration is required. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in Vercel, then redeploy.</p><p>Follow the included README.md to create the Supabase database and security policies.</p></section>`;}
 function showAuth() {
@@ -397,7 +397,18 @@ if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=
       `<option value="${esc(vendor.id)}">${esc(vendor.name)}</option>`
     ).join('')}
   </select>
-</label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(currentTransactions().filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
+</label>
+<details class="wide" id="tx-new-vendor">
+  <summary>Create New Vendor</summary>
+  <label>Company name
+    <input id="tx-new-vendor-name" maxlength="200">
+  </label>
+  <button type="button" class="secondary" id="tx-save-vendor">
+    Save vendor
+  </button>
+  <p id="tx-vendor-message" role="status" hidden></p>
+</details>
+<label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(currentTransactions().filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
 if (tab === 'Vendors') content = vendorPage();
 if (tab === 'Expense Tracking') {
   const rows = transactions.map(t => ({ ...t, account: accountName(t.account) }));
@@ -528,7 +539,68 @@ function bind(){
 const tx = document.getElementById('txform');
 
 if (tx) {
-  tx.onsubmit = async e => {
+  const vendorPicker = tx.elements.namedItem('vendor_id');
+  const vendorPanel = document.getElementById('tx-new-vendor');
+  const vendorName = document.getElementById('tx-new-vendor-name');
+  const saveVendor = document.getElementById('tx-save-vendor');
+  const vendorMessage = document.getElementById('tx-vendor-message');
+
+  saveVendor.onclick = async () => {
+    if (loading) return;
+
+    const name = vendorName.value.trim();
+    vendorMessage.hidden = true;
+
+    if (!name) {
+      vendorMessage.textContent = 'Enter a company name.';
+      vendorMessage.hidden = false;
+      vendorName.focus();
+      return;
+    }
+
+    const orgId = org.id;
+    const userId = session.user.id;
+    loading = true;
+    saveVendor.disabled = true;
+
+    try {
+      const { data, error } = await sb.from('vendors')
+        .insert({ org_id: orgId, name, contacts: [] })
+        .select('id,name,contacts')
+        .single();
+
+      if (error) throw error;
+      if (org?.id !== orgId || session?.user.id !== userId) return;
+
+      vendors = [...vendors, data].sort((a, b) => a.name.localeCompare(b.name));
+
+      if (tx.isConnected) {
+        vendorPicker.replaceChildren(
+          new Option('Choose vendor', ''),
+          ...vendors.map(vendor => new Option(vendor.name, vendor.id))
+        );
+        vendorPicker.value = data.id;
+        vendorName.value = '';
+        vendorPanel.open = false;
+        vendorPicker.focus();
+      }
+    } catch (error) {
+      vendorMessage.textContent = error.code === '23505'
+        ? 'A vendor with this name already exists. Choose it from the dropdown.'
+        : error.message;
+      vendorMessage.hidden = false;
+    } finally {
+      loading = false;
+      saveVendor.disabled = false;
+    }
+  };
+
+  vendorName.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveVendor.click();
+    }
+  });  tx.onsubmit = async e => {
     e.preventDefault();
 
     if (loading) return;
