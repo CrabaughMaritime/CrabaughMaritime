@@ -23,3 +23,30 @@ dialog::backdrop { background: #091b2b99; }
   .chart-body { gap: 12px; }
   .chart-legend { flex-basis: 100%; }
 }
+.receipt-thumbnail:not([hidden]) {
+  display: block;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem;
+}
+
+.receipt-thumbnail img,
+.receipt-thumbnail canvas {
+  display: block;
+  width: 96px;
+  height: 120px;
+  object-fit: contain;
+  background: white;
+}
+
+.receipt-preview-dialog {
+  width: min(92vw, 860px);
+  max-height: 90vh;
+}
+
+.receipt-preview-body img,
+.receipt-preview-body canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.75rem auto;
+}
