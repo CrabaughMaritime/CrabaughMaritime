@@ -449,6 +449,7 @@ function editTransaction(id) {
     'category',
     'account',
     'person',
+    'vendor_id',
     'notes'
   ]) {
    const input = form.elements[field];
