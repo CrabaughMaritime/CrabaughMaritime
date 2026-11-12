@@ -15,7 +15,14 @@ let session=null,org=null,transactions=[],reminders=[],receipts=[],tab='Dashboar
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const today=()=>new Date().toLocaleDateString('en-CA');
 const month=()=>today().slice(0,7);
-const options=(arr,selected='')=>arr.map(x=>`<option value="${esc(x)}" ${x===selected?'selected':''}>${esc(x.charAt(0).toUpperCase()+x.slice(1))}</option>`).join('');const cats=['Travel','Fuel','Vessel supplies','Maintenance','Insurance','Medical','Software','Office','Meals','Professional fees','Training','Licenses','Phone & internet','Vehicle','Advertising','Payroll expense','Taxes','Other','Uncategorized'];
+const options=(arr,selected='')=>arr.map(x=>`<option value="${esc(x)}" ${x===selected?'selected':''}>${esc(x.charAt(0).toUpperCase()+x.slice(1))}</option>`).join('');const cats = [
+  'Travel', 'Fuel', 'Vessel Supplies', 'Maintenance', 'Insurance',
+  'Medical', 'Software', 'Office Supplies', 'Household Supplies',
+  'Animals', 'Entertainment', 'Donations', 'Charity', 'Meals',
+  'Professional Fees', 'Training', 'Phone & Internet', 'Vehicle',
+  'Advertising', 'Advertisement', 'Payroll Expense', 'Taxes',
+  'Other', 'Uncategorized'
+];
 const types=['expense','income','payroll','distribution','transfer','reimbursement'];
 const accounts=[
   'Business Checking',
