@@ -1,5 +1,8 @@
 import { accept, validateReceipt } from './supabase/functions/_shared/receipt-validation.js';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+GlobalWorkerOptions.workerSrc = pdfWorker;
 export function receiptTools({ sb, orgId, transactions, receipts, cats, esc, money, options, load }) {
   const fields = (receipt, transactionId) => {
     const selected = receipt?.transaction_id ?? transactionId;
