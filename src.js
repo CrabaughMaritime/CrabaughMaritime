@@ -228,10 +228,168 @@ const accountName = name => name === 'Business checking' ? 'Business Checking' :
 const accountOptions = () => [...new Set([...accounts, ...transactions.map(t => accountName(t.account)).filter(Boolean)])];
 const currentTransactions = () => transactions.filter(t => !t.bank_removed);
 const getReceiptTools = () => receiptTools({ sb, orgId: org.id, transactions, receipts, cats, esc, money, options, load });
+function vendorPage() {
+  return `<div class="twocol">
+    <section class="panel">
+      <h2>Vendor details</h2>
+      <div id="notice" hidden role="alert"></div>
+      <form id="vendor-form" class="formgrid">
+        <label class="wide">Company name
+          <input name="company" maxlength="200" required>
+        </label>
+        <div id="vendor-contacts" class="wide"></div>
+        <button type="button" id="add-contact" class="secondary">
+          Add contact
+        </button>
+        <button type="submit">Save vendor</button>
+        <button type="button" id="cancel-vendor" class="secondary" hidden>
+          Cancel editing
+        </button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2>Saved vendors</h2>
+      ${vendors.map(vendor => `<div class="listrow">
+        <div>
+          <strong>${esc(vendor.name)}</strong>
+          <small>${vendor.contacts.length} contacts</small>
+        </div>
+        <div class="rowactions">
+          <button type="button" class="secondary"
+            data-vendor-edit="${esc(vendor.id)}">Edit</button>
+          ${workspaceRole === 'owner' ? `
+            <button type="button" class="secondary"
+              data-vendor-delete="${esc(vendor.id)}">Delete</button>
+          ` : ''}
+        </div>
+      </div>`).join('') || '<p class="muted">No vendors yet.</p>'}
+    </section>
+  </div>`;
+}
 
-function render(){let content='';const m=currentTransactions().filter(x=>x.date?.startsWith(month())),exp=m.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount),0),pay=m.filter(x=>x.type==='payroll').reduce((a,x)=>a+Number(x.amount),0),income=m.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount),0);const upcoming=reminders.filter(x=>!x.completed).slice(0,8);
+function bindVendorPage() {
+  const form = document.getElementById('vendor-form');
+  if (!form) return;
+
+  const orgId = org.id;
+  const company = form.elements.namedItem('company');
+  const contacts = document.getElementById('vendor-contacts');
+  const cancel = document.getElementById('cancel-vendor');
+  let vendorId = null;
+
+  function addContact(contact = {}) {
+    contacts.insertAdjacentHTML('beforeend', `<fieldset>
+      <legend>Contact</legend>
+      <label>Name
+        <input name="contact_name" maxlength="200" value="${esc(contact.name)}">
+      </label>
+      <label>Email
+        <input name="contact_email" type="email" maxlength="254"
+          value="${esc(contact.email)}">
+      </label>
+      <label>Phone
+        <input name="contact_phone" type="tel" maxlength="50"
+          value="${esc(contact.phone)}">
+      </label>
+      <button type="button" class="secondary">Remove contact</button>
+    </fieldset>`);
+
+    const row = contacts.lastElementChild;
+    row.querySelector('button').onclick = () => row.remove();
+  }
+
+  document.getElementById('add-contact').onclick = () => addContact();
+
+  cancel.onclick = () => {
+    vendorId = null;
+    form.reset();
+    contacts.replaceChildren();
+    cancel.hidden = true;
+  };
+
+  document.querySelectorAll('[data-vendor-edit]').forEach(button => {
+    button.onclick = () => {
+      const vendor = vendors.find(row => row.id === button.dataset.vendorEdit);
+      if (!vendor) return;
+
+      vendorId = vendor.id;
+      company.value = vendor.name;
+      contacts.replaceChildren();
+      vendor.contacts.forEach(addContact);
+      cancel.hidden = false;
+      company.focus();
+    };
+  });
+
+  document.querySelectorAll('[data-vendor-delete]').forEach(button => {
+    button.onclick = async () => {
+      if (!confirm('Delete this vendor? Its transactions will be kept.')) return;
+
+      button.disabled = true;
+      try {
+        const { error } = await sb.from('vendors').delete()
+          .eq('org_id', orgId)
+          .eq('id', button.dataset.vendorDelete)
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        await load();
+      } catch (error) {
+        notice(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    };
+  });
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (loading) return;
+
+    loading = true;
+    const save = form.querySelector('[type="submit"]');
+    save.disabled = true;
+
+    try {
+      const name = company.value.trim();
+      if (!name) throw Error('Enter a company name.');
+
+      const rows = [...contacts.querySelectorAll('fieldset')].map(row => ({
+        name: row.querySelector('[name=contact_name]').value.trim(),
+        email: row.querySelector('[name=contact_email]').value.trim(),
+        phone: row.querySelector('[name=contact_phone]').value.trim()
+      })).filter(contact => Object.values(contact).some(Boolean));
+
+      const query = vendorId
+        ? sb.from('vendors').update({ name, contacts: rows })
+            .eq('org_id', orgId).eq('id', vendorId)
+        : sb.from('vendors').insert({ org_id: orgId, name, contacts: rows });
+
+      const { error } = await query.select('id').single();
+      if (error) throw error;
+
+      await load();
+    } catch (error) {
+      notice(error.code === '23505'
+        ? 'A vendor with this name already exists.'
+        : error.message);
+    } finally {
+      loading = false;
+      save.disabled = false;
+    }
+  };
+}function render(){let content='';const m=currentTransactions().filter(x=>x.date?.startsWith(month())),exp=m.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount),0),pay=m.filter(x=>x.type==='payroll').reduce((a,x)=>a+Number(x.amount),0),income=m.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount),0);const upcoming=reminders.filter(x=>!x.completed).slice(0,8);
 if(tab==='Dashboard')content=`${expenseDonut('Expenses by Category', currentTransactions(), 'category', { esc, money })}<div class="stats"><div class="stat"><span>MONTHLY INCOME</span><strong>${money(income)}</strong></div><div class="stat"><span>OPERATING EXPENSES</span><strong>${money(exp)}</strong></div><div class="stat"><span>PAYROLL TRANSFERS</span><strong>${money(pay)}</strong></div><div class="stat"><span>UPCOMING REMINDERS</span><strong>${upcoming.length}</strong></div></div><div class="twocol"><section class="panel"><div class="sectionhead"><h2>Recent transactions</h2><button data-tab="Transactions" class="linkbtn">View all</button></div>${txTable(currentTransactions().slice(0,7))}</section><section class="panel"><div class="sectionhead"><h2>Upcoming</h2><button data-tab="Reminders" class="linkbtn">Manage</button></div>${reminderList(upcoming)}</section></div><p class="hint">Transfers and shareholder distributions are tracked separately from deductible operating expenses. Reports are informational, not filed tax returns.</p>`;
-if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=`<div class="twocol"><section class="panel"><h2>${editingTransactionId?'Edit transaction':payroll?'Record payroll or distribution':'Add transaction'}</h2><div id="notice" hidden></div><form id="txform" class="formgrid"><label>Date<input type="date" name="date" value="${today()}" required></label><label>Amount ($)<input type="number" name="amount" min="${editingTransactionId ? '0' : '0.01'}" step="0.01" required></label><label class="wide">Description<input name="description" placeholder="Vendor or payment description" required maxlength="1000"></label><label>Type<select name="type">${options(payroll?['payroll','distribution','reimbursement']:types,payroll?'payroll':'expense')}</select></label><label>Category<select name="category">${options(cats,payroll?'Payroll expense':'Uncategorized')}</select></label><label>Account<select name="account" required>${options(accountOptions(),'Business Checking')}</select></label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(currentTransactions().filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
+if(tab==='Transactions'||tab==='Payroll'){const payroll=tab==='Payroll';content=`<div class="twocol"><section class="panel"><h2>${editingTransactionId?'Edit transaction':payroll?'Record payroll or distribution':'Add transaction'}</h2><div id="notice" hidden></div><form id="txform" class="formgrid"><label>Date<input type="date" name="date" value="${today()}" required></label><label>Amount ($)<input type="number" name="amount" min="${editingTransactionId ? '0' : '0.01'}" step="0.01" required></label><label class="wide">Description<input name="description" placeholder="Vendor or payment description" required maxlength="1000"></label><label>Type<select name="type">${options(payroll?['payroll','distribution','reimbursement']:types,payroll?'payroll':'expense')}</select></label><label>Category<select name="category">${options(cats,payroll?'Payroll expense':'Uncategorized')}</select></label><label>Account<select name="account" required>${options(accountOptions(),'Business Checking')}</select></label><label>Vendor
+  <select name="vendor_id">
+    <option value="">Choose vendor</option>
+    ${vendors.map(vendor =>
+      `<option value="${esc(vendor.id)}">${esc(vendor.name)}</option>`
+    ).join('')}
+  </select>
+</label><label>Person<input name="person" placeholder="You / spouse / employee"></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Business purpose, memo, reference number"></textarea></label><button class="wide">${editingTransactionId?'Update transaction':'Save transaction'}</button>${editingTransactionId?'<button type="button" class="wide secondary" id="cancel-edit-tx">Cancel editing</button>':''}</form></section><section class="panel"><h2>${payroll?'Payroll & distributions':'Transactions'}</h2>${txTable(currentTransactions().filter(x=>!payroll||['payroll','distribution','reimbursement'].includes(x.type)).slice(0,100))}</section></div>`;}
+if (tab === 'Vendors') content = vendorPage();
 if (tab === 'Expense Tracking') {
   const rows = transactions.map(t => ({ ...t, account: accountName(t.account) }));
   content = expenseTracking(rows, { esc, money, options, cats, types });
@@ -316,6 +474,7 @@ function editTransaction(id) {
 }
 async function submitRow(table,values){const {error}=await sb.from(table).insert({...values,org_id:org.id});if(error)throw error;await load();}
 function bind(){
+  bindVendorPage();
   document.querySelectorAll('[data-tab]').forEach(b => {
     b.onclick = () => {
            tab = b.dataset.tab;
@@ -368,7 +527,8 @@ if (tx) {
     try {
       const v = Object.fromEntries(new FormData(tx));
       v.amount = Number(v.amount);
-
+      v.amount = Number(v.amount);
+      v.vendor_id = v.vendor_id || null;
       if (editingTransactionId !== null) {
         const { data, error } = await sb
           .from('transactions')
