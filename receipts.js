@@ -19,7 +19,12 @@ export function receiptTools({ sb, orgId, transactions, receipts, cats, esc, mon
   </form>`;
   const list = (rows) => rows.map(r => {
     const tx = transactions.find(t => t.id === r.transaction_id);
-    return `<div class="receipt-item"><strong>${esc(r.file_name)}</strong>
+    return `<div class="receipt-item">
+      <button type="button" class="secondary receipt-thumbnail"
+        data-openreceipt="${esc(r.id)}"
+        aria-label="Preview ${esc(r.file_name)}"
+        hidden></button>
+      <strong>${esc(r.file_name)}</strong>
       <p class="muted">${esc(tx ? tx.date + ' · ' + tx.description : 'Unlinked')} · ${esc(r.category || tx?.category || 'Uncategorized')}${r.created_at ? ' · ' + esc(new Date(r.created_at).toLocaleDateString()) : ''}</p>
       <div class="rowactions"><button class="secondary" data-openreceipt="${esc(r.id)}">Download</button>
       <button class="secondary" data-editreceipt="${esc(r.id)}">Edit</button></div></div>`;
@@ -77,7 +82,7 @@ export function receiptTools({ sb, orgId, transactions, receipts, cats, esc, mon
       <button class="secondary" data-close-dialog>Close</button></div>${form(receipt, transactionId)}
       ${receipt ? '' : list(receipts.filter(r => r.transaction_id === transactionId))}`;
     dialog.querySelector('[data-close-dialog]').onclick = () => dialog.close();
-    bindForm(dialog, receipt);
+    bindForm(dialog, receipt); bindThumbnails(dialog);
     if (!dialog.open) dialog.showModal();
   }
    const imagePath = /\.(jpe?g|png|webp|gif|heic|heif)$/i;
