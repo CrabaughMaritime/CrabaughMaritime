@@ -80,15 +80,175 @@ export function receiptTools({ sb, orgId, transactions, receipts, cats, esc, mon
     bindForm(dialog, receipt);
     if (!dialog.open) dialog.showModal();
   }
-  async function download(id) {
+   const imagePath = /\.(jpe?g|png|webp|gif|heic|heif)$/i;
+  const pdfPath = /\.pdf$/i;
+
+  async function signedUrl(receipt) {
+    const { data, error } = await sb.storage.from('receipts')
+      .createSignedUrl(receipt.file_path, 300);
+
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  async function drawPdfPage(pdf, pageNumber, width) {
+    const page = await pdf.getPage(pageNumber);
+    const original = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: width / original.width });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+
+    await page.render({
+      canvasContext: canvas.getContext('2d'),
+      viewport
+    }).promise;
+
+    return canvas;
+  }
+
+  function bindThumbnails(container) {
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const button = entry.target;
+        observer.unobserve(button);
+        void fillThumbnail(button);
+      }
+    });
+
+    for (const button of container.querySelectorAll('.receipt-thumbnail')) {
+      const receipt = receipts.find(r => r.id === button.dataset.openreceipt);
+      if (!receipt || !(imagePath.test(receipt.file_path) ||
+                        pdfPath.test(receipt.file_path))) continue;
+
+      button.hidden = false;
+      button.textContent = 'Preview';
+      observer.observe(button);
+    }
+  }
+
+  async function fillThumbnail(button) {
+    const receipt = receipts.find(r => r.id === button.dataset.openreceipt);
+    if (!receipt) return;
+
+    try {
+      const url = await signedUrl(receipt);
+      if (imagePath.test(receipt.file_path)) {
+        const image = new Image();
+        image.alt = '';
+        image.src = url;
+        await image.decode();
+        button.replaceChildren(image);
+      } else {
+        const task = getDocument({ url, isEvalSupported: false });
+        try {
+          const pdf = await task.promise;
+          button.replaceChildren(await drawPdfPage(pdf, 160 === 0 ? 0 : 1, 160));
+        } finally {
+          await task.destroy();
+        }
+      }
+    } catch {
+      button.textContent = 'Preview';
+    }
+  }
+
+  async function preview(id) {
     const receipt = receipts.find(r => r.id === id);
     if (!receipt) return;
-    const { data, error } = await sb.storage.from('receipts').createSignedUrl(receipt.file_path, 60, { download: receipt.file_name });
-        if (error) return alert(error.message);
-    const link = document.createElement('a');
-    link.href = data.signedUrl;
-    link.rel = 'noreferrer';
-    link.click();
+
+    const dialog = document.createElement('dialog');
+    dialog.className = 'receipt-preview-dialog';
+    dialog.setAttribute('aria-label', 'Receipt preview');
+    dialog.innerHTML = `
+      <div class="sectionhead">
+        <h2>${esc(receipt.file_name)}</h2>
+        <button type="button" class="secondary" data-close>Close</button>
+      </div>
+      <div class="receipt-preview-body" aria-live="polite">Loading receipt…</div>
+    `;
+
+    let task;
+    const body = dialog.querySelector('.receipt-preview-body');
+    dialog.querySelector('[data-close]').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      if (task) void task.destroy().catch(() => {});
+    }, { once: true });
+
+    document.body.append(dialog);
+    dialog.showModal();
+
+    let url;
+    try {
+      url = await signedUrl(receipt);
+      if (!dialog.open) return;
+
+      if (imagePath.test(receipt.file_path)) {
+        const image = new Image();
+        image.alt = receipt.file_name;
+        image.src = url;
+        await image.decode();
+        if (dialog.open) body.replaceChildren(image);
+        return;
+      }
+
+      if (pdfPath.test(receipt.file_path)) {
+        task = getDocument({ url, isEvalSupported: false });
+        const pdf = await task.promise;
+        let pageNumber = 1;
+
+        const controls = document.createElement('div');
+        controls.className = 'rowactions';
+        controls.innerHTML = `
+          <button type="button" class="secondary" data-prev>Previous</button>
+          <span data-page></span>
+          <button type="button" class="secondary" data-next>Next</button>
+        `;
+
+        const previous = controls.querySelector('[data-prev]');
+        const next = controls.querySelector('[data-next]');
+        const status = controls.querySelector('[data-page]');
+        const pageView = document.createElement('div');
+        body.replaceChildren(controls, pageView);
+
+        async function showPage(number) {
+          previous.disabled = true;
+          next.disabled = true;
+          try {
+            const canvas = await drawPdfPage(pdf, number, 900);
+            if (!dialog.open) return;
+            pageNumber = number;
+            status.textContent = `Page ${number} of ${pdf.numPages}`;
+            pageView.replaceChildren(canvas);
+          } catch {
+            status.textContent = 'Could not display this page.';
+          } finally {
+            previous.disabled = pageNumber <= 1;
+            next.disabled = pageNumber >= pdf.numPages;
+          }
+        }
+
+        previous.onclick = () => showPage(pageNumber - 1);
+        next.onclick = () => showPage(pageNumber + 1);
+        await showPage(1);
+        return;
+      }
+    } catch {
+      if (!dialog.open) return;
+    }
+
+    body.textContent = 'This file could not be previewed in your browser.';
+    if (url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Open original file';
+      body.append(' ', link);
+    }
   }
-  return { form, list, bindForm, openDialog, download };
+
+  return { form, list, bindForm, openDialog, bindThumbnails, preview };
 }
