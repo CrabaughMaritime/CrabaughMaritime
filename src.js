@@ -81,14 +81,9 @@ function showAuth() {
   `;
 
   const form = document.getElementById('authform');
-  let mode = 'signin';
-
-  form.querySelectorAll('button[type=submit]').forEach(b => {
-    b.onclick = () => mode = b.value;
-  });
-
-  form.onsubmit = async e => {
+    form.onsubmit = async e => {
     e.preventDefault();
+    const mode = e.submitter?.value === 'signup' ? 'signup' : 'signin';
     const f = new FormData(form);
     const email = f.get('email');
     const password = f.get('password');
